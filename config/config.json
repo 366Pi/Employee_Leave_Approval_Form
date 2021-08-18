@@ -11,16 +11,21 @@
       ]
     }
   },
-  "externals": {"jquery": {
-    "path": "https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js",
-    "globalName": "jquery"
+  "externals": {
+    "jquery": {
+      "path": "https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js",
+      "globalName": "jquery"
+    },
+    "bootstrap": {
+      "path": "https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js",
+      "globalName": "bootstrap",
+      "globalDependencies": [
+        "jquery"
+      ]
+    }
   },
-  "bootstrap": {
-    "path": "https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js",
-    "globalName": "bootstrap",
-    "globalDependencies": ["jquery"]
-  }},
   "localizedResources": {
-    "LeaveApprovalWebPartStrings": "lib/webparts/leaveApproval/loc/{locale}.js"
+    "LeaveApprovalWebPartStrings": "lib/webparts/leaveApproval/loc/{locale}.js",
+    "ControlStrings": "node_modules/@pnp/spfx-controls-react/lib/loc/{locale}.js"
   }
 }

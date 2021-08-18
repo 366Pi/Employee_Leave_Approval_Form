@@ -21,7 +21,8 @@ export default class LeaveApprovalWebPart extends BaseClientSideWebPart<ILeaveAp
     const element: React.ReactElement<ILeaveApprovalProps> = React.createElement(
       LeaveApproval,
       {
-        description: this.properties.description
+        description: this.properties.description,
+        context: this.context
       }
     );
 
