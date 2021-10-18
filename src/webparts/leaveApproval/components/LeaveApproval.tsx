@@ -34,6 +34,7 @@ import {
   IDropdownStyles,
   MessageBar,
   MessageBarType,
+  DefaultButton,
 } from "@fluentui/react";
 import { Image, IImageProps, ImageFit } from "@fluentui/react/lib/Image";
 import {
@@ -62,6 +63,7 @@ import "@pnp/sp/lists";
 import "@pnp/sp/items";
 
 import CommOff from "./CompOff";
+import { FontIcon } from "@fluentui/react/lib/Icon";
 
 SPComponentLoader.loadCss(
   "https://maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css"
@@ -74,10 +76,14 @@ require("bootstrap");
 
 const dropdownStyles: Partial<IDropdownStyles> = { dropdown: { width: 300 } };
 
+const dropdownStyles2: Partial<IDropdownStyles> = {
+  dropdown: { width: 250, margin: 0 },
+};
+
 const dropdownControlledExampleOptions = [
   { key: "fw_to_HA", text: "Forward to Higher Authorities" },
   { key: "fw_to_HR", text: "Forward to HR" },
-  { key: "accepted", text: "Accepted" },
+  { key: "approved", text: "Approved" },
   { key: "rejected", text: "Rejected" },
 ];
 
@@ -95,7 +101,7 @@ const imageProps: Partial<IImageProps> = {
   imageFit: ImageFit.centerContain,
   width: 150,
   height: 150,
-  src: "http://via.placeholder.com/250x150",
+  src: "https://cdn.pixabay.com/photo/2016/08/08/09/17/avatar-1577909_640.png/250x150",
   // Show a border around the image (just for demonstration purposes)
   styles: (props) => ({
     root: { border: "1px solid " + props.theme.palette.neutralSecondary },
@@ -105,6 +111,18 @@ const imageProps: Partial<IImageProps> = {
 const exampleChildClass = mergeStyles({
   display: "block",
   marginBottom: "10px",
+});
+
+const iconClass = mergeStyles({
+  fontSize: 25,
+  height: 25,
+  width: 25,
+  margin: "0 25px",
+});
+
+const buttonClass = mergeStyles({
+  width: 130,
+  height: 40,
 });
 
 const textFieldStyles: Partial<ITextFieldStyles> = {
@@ -119,10 +137,11 @@ const contentStyles = mergeStyleSets({
     display: "flex",
     flexFlow: "column nowrap",
     alignItems: "stretch",
+    // backgroundColor: "red",
   },
   header: [
     // eslint-disable-next-line deprecation/deprecation
-    theme.fonts.xLargePlus,
+    theme.fonts.large,
     {
       flex: "1 1 auto",
       borderTop: `4px solid ${theme.palette.themePrimary}`,
@@ -164,6 +183,7 @@ export interface IDetailsListBasicExampleItem {
   empDepartment: string;
   empmobile: string;
   empEmail: string;
+  empId: string;
 
   // leave req data --> coming from leave req list
   Leave_From: String;
@@ -172,9 +192,11 @@ export interface IDetailsListBasicExampleItem {
   return_date: string;
   leave_type_id: Number;
   leave_type_text: string; // have to be fetched
+  leave_type_key: string; // actual value of leave type
   Purpose: string;
   commOffDate: string;
   commOffOccasion: string;
+  commOffRefID: number;
   leaveReqItem_Id: number;
 }
 
@@ -201,14 +223,19 @@ export default class LeaveApproval extends React.Component<
     EmpDesignation: any;
     EmpEmail: any;
     EmpMobile: any;
+    EmpId: any;
 
     ApproverEmail: any;
     ApproverId: any;
+    ApproverEmpId: any;
+    ApproverName: any;
     reliever: any;
     selectedAction: any;
     remarks: any;
     relieverEmail: any;
     relieverId: any;
+    relieverDropdownOptions: any;
+    relieverArr: any;
 
     leaveStartDate: any;
     leaveEndDate: any;
@@ -217,20 +244,27 @@ export default class LeaveApproval extends React.Component<
     leaveAppliedForDays: any;
     leaveType_Id: any;
     leaveType: any;
+    leaveTypeKey: any;
     CommpOffDate: any;
     CommpOffOccasion: any;
     CommpOffVisible: any;
+    CommOffRefID: any;
 
     LeaveReqItem_Id: any;
     LeaveMasterItem_Id: any;
 
     // balance leaves
     balLeavesObj: BalLeftBlueprintObj;
-
+    leaveStretchArr: any;
     isIncomplete: any;
   }
 > {
+  // required in development
   w = Web(this.props.webUrl + "/sites/Maitri");
+
+  // required in production
+  // w = Web(this.props.webUrl);
+
   url = location.search;
   params = new URLSearchParams(this.url);
   id = this.params.get("spid");
@@ -386,14 +420,20 @@ export default class LeaveApproval extends React.Component<
       EmpDesignation: undefined,
       EmpEmail: undefined,
       EmpMobile: undefined,
+      EmpId: undefined,
 
       ApproverEmail: undefined,
       ApproverId: undefined,
+      ApproverEmpId: undefined,
+      ApproverName: undefined,
+
       reliever: undefined,
       selectedAction: undefined,
       remarks: undefined,
       relieverEmail: undefined,
       relieverId: undefined,
+      relieverDropdownOptions: [],
+      relieverArr: [],
 
       leaveStartDate: undefined,
       leaveEndDate: undefined,
@@ -402,8 +442,10 @@ export default class LeaveApproval extends React.Component<
       leaveAppliedForDays: undefined,
       leaveType_Id: undefined,
       leaveType: undefined,
+      leaveTypeKey: undefined,
       CommpOffDate: undefined,
       CommpOffOccasion: undefined,
+      CommOffRefID: undefined,
       CommpOffVisible: false,
 
       LeaveReqItem_Id: undefined,
@@ -411,8 +453,25 @@ export default class LeaveApproval extends React.Component<
       LeaveMasterItem_Id: undefined,
 
       isIncomplete: false,
+      leaveStretchArr: [],
     };
   }
+
+  // Returns an array of dates between the two dates
+  private getDates = (startDate, endDate) => {
+    const dates = [];
+    let currentDate = startDate;
+    const addDays = function (days) {
+      const date = new Date(this.valueOf());
+      date.setDate(date.getDate() + days);
+      return date;
+    };
+    while (currentDate <= endDate) {
+      dates.push(currentDate);
+      currentDate = addDays.call(currentDate, 1);
+    }
+    return dates;
+  };
 
   private hideModal = () => {
     this.setState({
@@ -442,6 +501,38 @@ export default class LeaveApproval extends React.Component<
   private handleErrorMessage = () => {
     this.setState({ isIncomplete: false });
   };
+
+  private handleReliverSelection =
+    (index: any) =>
+    (event: React.FormEvent<HTMLDivElement>, item: IDropdownOption) => {
+      // this.setState(
+      //   {
+      //     selectedItem: item.key,
+      //     selectedAction: item.text,
+      //   },
+      //   () => {
+      //     console.log(this.state.selectedItem);
+      //   }
+      // );
+      console.log(`index is ${index} and item is `);
+
+      // updating state
+      // 1 making a copy of reliverArr
+      let temps = [...this.state.relieverArr];
+      let temp = { ...temps[index] };
+      let dt = this.state.leaveStretchArr[index];
+      // replacing what we are intrested in
+      temp = { date: dt, item: item };
+      temps[index] = temp;
+      this.setState(
+        {
+          relieverArr: temps,
+        },
+        () => {
+          console.log("The relieverArr is: ", this.state.relieverArr);
+        }
+      );
+    };
 
   public render(): React.ReactElement<ILeaveApprovalProps> {
     return (
@@ -477,6 +568,18 @@ export default class LeaveApproval extends React.Component<
           isOpen={this.state.isModalOpen}
           onDismiss={this.hideModal}
           isBlocking={false}
+          styles={{
+            main: {
+              selectors: {
+                ["@media (min-width: 1000px)"]: {
+                  width: 1000,
+                  height: 800,
+                  maxWidth: 1000,
+                  maxHeight: 1000,
+                },
+              },
+            },
+          }}
           containerClassName={contentStyles.container}
           dragOptions={undefined}
         >
@@ -707,23 +810,48 @@ export default class LeaveApproval extends React.Component<
                   </div>
                 </div>
 
-                {/* will be releived by: people picker  */}
+                {/* Option to select relievers according to leave dates */}
                 <div className="row top-buffer">
-                  <div className="col-lg-6">
+                  <div className="col-lg-12">
                     <div className="form-group">
-                      <PeoplePicker
-                        context={this.props.context}
-                        titleText="Reliever"
-                        personSelectionLimit={1}
-                        groupName={""} // Leave this blank in case you want to filter from all users
-                        showtooltip={true}
-                        required={true}
-                        // disabled={true}
-                        onChange={this._getPeoplePickerItems}
-                        showHiddenInUI={false}
-                        principalTypes={[PrincipalType.User]}
-                        resolveDelay={1000}
-                      />
+                      <br />
+                      <table className="table table-hover">
+                        <thead>
+                          <th scope="col">#</th>
+                          <th scope="col">Date</th>
+                          <th scope="col">Select Reliver</th>
+                        </thead>
+                        <tbody>
+                          {this.state.leaveStretchArr.map((date, index) => (
+                            <tr>
+                              <td>{index + 1}</td>
+                              <td>
+                                <DatePicker
+                                  // label="Returning On"
+                                  // placeholder="Select a date..."
+                                  // ariaLabel="Return Date"
+                                  // DatePicker uses English strings by default. For localized apps, you must override this prop.
+                                  strings={defaultDatePickerStrings}
+                                  value={new Date(date)}
+                                  disabled
+                                />
+                                {/* {new Date(date).toLocaleDateString("en-US")} */}
+                              </td>
+                              <td>
+                                <Dropdown
+                                  // label="Select a reliever"
+                                  // selectedKey={this.state.selectedItem}
+                                  // eslint-disable-next-line react/jsx-no-bind
+                                  onChange={this.handleReliverSelection(index)}
+                                  placeholder="Select an option"
+                                  options={this.state.relieverDropdownOptions}
+                                  styles={dropdownStyles2}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>
@@ -804,7 +932,7 @@ export default class LeaveApproval extends React.Component<
   }
 
   private getEmpData = (obj: any) => {
-    console.log(`${obj.Employee_Email}`);
+    // console.log(`this is the obj.Employee_Email value: ${obj.Employee_Email}`);
 
     // make graph api call and store emp data in cols array
     this.props.context.msGraphClientFactory
@@ -815,9 +943,9 @@ export default class LeaveApproval extends React.Component<
           .select("displayName,jobTitle,department,mobilePhone,mail")
           .get()
           .then((res) => {
-            console.log(
-              `${res.displayName}, ${res.department}, ${res.mail}, ${res.mobilePhone}, ${res.jobTitle}\n`
-            );
+            // console.log(
+            //   `${res.displayName}, ${res.department}, ${res.mail}, ${res.mobilePhone}, ${res.jobTitle}\n`
+            // );
 
             // get the leave type text from leave_types table using its id
             this.w.lists
@@ -825,7 +953,12 @@ export default class LeaveApproval extends React.Component<
               .items.getById(obj.Leave_TypeId)
               .get()
               .then((item: any) => {
-                this.initializeColData(obj, res, item.Title);
+                this.initializeColData(
+                  obj,
+                  res,
+                  item.Leave_Type_Full,
+                  item.Title
+                );
                 // console.log(item.Leave_Type_Full);
               });
           })
@@ -841,10 +974,10 @@ export default class LeaveApproval extends React.Component<
       .items.get()
       .then((items: any[]) => {
         items.map((el) => {
-          console.log("Inside getListItems: ", el.Status);
+          // console.log("Inside getListItems: ", el.Status);
           if (
             el.Assigned_To_PersonId === this.state.ApproverId &&
-            el.Status != "Accepted"
+            el.Status === "Pending"
           ) {
             this.getEmpData(el);
           }
@@ -853,20 +986,30 @@ export default class LeaveApproval extends React.Component<
   };
 
   private _onSubmitInvoked = (): void => {
+    /*
+    remark: cannot handle special leaves
+    there will be an error if we try to accept special leaves
+    */
     const list = this.w.lists.getByTitle("Leave_Requests");
     const list2 = this.w.lists.getByTitle("Leave_Master");
-    const leave_type = this.state.leaveType;
-    console.log("when submit: ", leave_type);
+    const leave_type = this.state.leaveTypeKey;
+    console.log("when submit: ", leave_type, " ", this.state.selectedAction);
 
     if (
-      this.state.relieverId === undefined ||
       this.state.selectedAction === undefined ||
       this.state.remarks === undefined
     )
       this.setState({ isIncomplete: true });
     else {
-      if (this.state.selectedAction === "Accepted") {
+      // this if is for deducting leaveAppliedForDays from Leave_Master
+      // if the leave is approved, and not a special leave
+      if (
+        this.state.selectedAction === "Approved" &&
+        this.state.leaveType != "Special Leave"
+      ) {
         // get a specific item by id
+        console.log("Now Deducting from leave Master");
+
         this.w.lists
           .getByTitle("Leave_Master")
           .items.getById(this.state.LeaveMasterItem_Id)
@@ -884,9 +1027,52 @@ export default class LeaveApproval extends React.Component<
               .then((i) => {
                 console.log(i);
               });
-            console.log(item);
+            console.log("item is : ", item);
+          })
+          .catch((err) => {
+            console.log("An error occured while updating leave Master 😢", err);
           });
       }
+
+      // push all reliver data to Reliever_List and if leave type is commOff
+      // update two values in CommOff_Master
+      if (this.state.selectedAction === "Approved") {
+        this.state.relieverArr.map((el) => {
+          // pushing each element in rel arr to rel_list
+          console.log("Id is: ");
+          const obj = this.GetUserId(el.item.mail);
+          console.log(obj);
+          // add an item to the list
+          this.w.lists
+            .getByTitle("Reliever_List")
+            .items.add({
+              Request_ID: this.state.LeaveReqItem_Id,
+              Date: new Date(el.date),
+              RelieverId: obj.d.Id,
+            })
+            .then((iar) => {
+              console.log(iar);
+            });
+        });
+
+        if (this.state.leaveTypeKey === "Comp_Off") {
+          // updaing the CommOff_Master list
+          // with Status and Approved By
+          let co_list = this.w.lists.getByTitle("CommOff_Master");
+          co_list.items
+            .getById(this.state.CommOffRefID)
+            .update({
+              Status: "Availed",
+              Approved_ById: this.state.ApproverId,
+            })
+            .then((i) => {
+              console.log(i);
+            });
+        }
+      }
+
+      // This is always be done if submit button in clicked!
+      // update req status and remarks inside leave_req list
       list.items
         .getById(this.state.LeaveReqItem_Id)
         .update({
@@ -902,21 +1088,21 @@ export default class LeaveApproval extends React.Component<
             );
           } else {
             alert("Approved leaves, deducted from leave master.");
-            window.location.reload();
           }
           this.setState({ isModalOpen: false });
+          window.location.reload();
         });
     }
   };
 
   private _checkIfCommpOff = (): void => {
-    if (this.state.leaveType == "Compensatory Off")
+    if (this.state.leaveTypeKey === "Comp_Off")
       this.setState({ CommpOffVisible: true });
     else this.setState({ CommpOffVisible: false });
   };
 
   private _onItemInvoked = (item: IDetailsListBasicExampleItem): void => {
-    // alert(`Item invoked: ${item.Name}`);
+    console.log(item);
     this.setState(
       {
         isModalOpen: true,
@@ -926,17 +1112,20 @@ export default class LeaveApproval extends React.Component<
         EmpDesignation: item.empDesignation,
         EmpEmail: item.empEmail,
         EmpMobile: item.empmobile,
+        EmpId: item.empId,
 
         leaveStartDate: item.Leave_From,
         leaveEndDate: item.Leave_Till,
         returnDate: item.return_date,
         leaveAppliedForDays: item.Total_Days,
         leaveType: item.leave_type_text,
+        leaveTypeKey: item.leave_type_key,
         leavePurpose: item.Purpose,
         CommpOffDate: item.commOffDate,
         CommpOffOccasion: item.commOffOccasion,
-
+        CommOffRefID: Number(item.commOffRefID),
         LeaveReqItem_Id: item.leaveReqItem_Id,
+        relieverArr: [],
       },
 
       () => {
@@ -946,10 +1135,17 @@ export default class LeaveApproval extends React.Component<
           " ",
           this.state.CommpOffOccasion,
           " ",
-          this.state.leaveType
+          this.state.CommOffRefID + 1
         );
         this._checkIfCommpOff();
         this.getBalLeaveData();
+        const dates = this.getDates(
+          new Date(this.state.leaveStartDate),
+          new Date(this.state.leaveEndDate)
+        );
+        this.setState({ leaveStretchArr: dates }, () => {
+          console.log(this.state.leaveStretchArr);
+        });
       }
     );
 
@@ -970,8 +1166,8 @@ export default class LeaveApproval extends React.Component<
       .items.get()
       .then((items: any[]) => {
         for (let i = 0; i < items.length; i++) {
-          console.log("Inside leave_master ", items[i]);
-          if (items[i].Title == this.state.EmpEmail) {
+          // console.log("Inside leave_master ", items[i]);
+          if (items[i].Employee_ID == this.state.EmpId) {
             const temp: BalLeftBlueprintObj = {
               CL: items[i].CL,
               SL: items[i].SL,
@@ -996,6 +1192,8 @@ export default class LeaveApproval extends React.Component<
                   "Found! ",
                   items[i].Employee_ID,
                   " ",
+                  this.state.EmpId,
+                  " ",
                   this.state.balLeavesObj
                 );
               }
@@ -1019,7 +1217,11 @@ export default class LeaveApproval extends React.Component<
   // Pass logged in user's emailID to this function to get his userID
   // which will be pushed to the EmployeeId list col
   private GetUserId(userName) {
+    // required while dev
     var siteUrl = this.props.webUrl + "/sites/Maitri";
+
+    // requile while building for production
+    // var siteUrl = this.props.webUrl;
 
     // console.log("siteUrl", siteUrl);
 
@@ -1063,7 +1265,7 @@ export default class LeaveApproval extends React.Component<
       .then((client: MSGraphClient) => {
         client
           .api("/me")
-          .select("mail")
+          .select("displayName,mail,employeeId")
           .get()
           .then((res) => {
             // console.log(
@@ -1072,15 +1274,21 @@ export default class LeaveApproval extends React.Component<
             this.setState(
               {
                 ApproverEmail: res.mail,
+                ApproverName: res.displayName,
+                ApproverEmpId: res.employeeId,
               },
               () => {
                 const obj = this.GetUserId(this.state.ApproverEmail);
                 this.setState({ ApproverId: obj.d.Id }, () => {
-                  console.log("EmployeeId: ", this.state.ApproverId);
+                  // console.log("Approver employeeId: ", this.state.ApproverId);
                   this.getListItems();
                 });
               }
             );
+          })
+          .then(() => {
+            // after getting and setting all the approver details will call
+            this.getUnderEmployees();
           })
           .catch((err) => {
             console.log("🔥 There was an error 🧯 ", err);
@@ -1103,7 +1311,12 @@ export default class LeaveApproval extends React.Component<
     return call;
   }
 
-  private initializeColData = (obj: any, res: any, LeaveTypeTxt: any) => {
+  private initializeColData = (
+    obj: any,
+    res: any,
+    LeaveTypeTxt: any,
+    LeaveTypeKey: any
+  ) => {
     this.setState({
       items: [
         ...this.state.items,
@@ -1113,6 +1326,7 @@ export default class LeaveApproval extends React.Component<
           empDepartment: res.department,
           empEmail: res.mail,
           empmobile: res.mobilePhone,
+          empId: obj.Employee_ID,
 
           Leave_From: new Date(obj.Leave_From).toLocaleDateString("en-US"),
           Leave_Till: new Date(obj.Leave_To).toLocaleDateString("en-US"),
@@ -1121,11 +1335,110 @@ export default class LeaveApproval extends React.Component<
           leave_type_id: obj.Leave_TypeId,
           Purpose: obj.Purpose,
           leave_type_text: LeaveTypeTxt,
+          leave_type_key: LeaveTypeKey,
           commOffDate: obj.Compoff_against_date,
-          commOffOccasion: obj.Compoff_occasion,
+          commOffOccasion: obj.Compoff_occasion.split("$")[1],
+          commOffRefID: obj.Compoff_occasion.split("$")[0],
           leaveReqItem_Id: obj.Id,
         },
       ],
     });
+  };
+
+  // get all employees under logged in incharge
+  private getUnderEmployees = async () => {
+    /* 
+    called after getApproverData, sets a state array with
+    emp names under logged in approver.
+    fetches the entire Employee_Master, matches Incharge_Name col
+    logged in user's displayName from ad.
+    Runs once, when the form is loaded.
+    */
+
+    // make a graph api call to get all users
+    // then for each user get their manager
+    let items: any;
+    let result: any;
+    const cli = await this.props.context.msGraphClientFactory.getClient();
+    const res = await cli.api("/users?Expand=manager").version("beta").get();
+
+    // await works!!
+    // console.log(res);
+    // console.log(res["@odata.nextLink"]);
+    // console.log(res["value"]);
+
+    result = res;
+    items = res["value"];
+
+    while (result["@odata.nextLink"]) {
+      let lnk = result["@odata.nextLink"];
+      let skiptoken = result["@odata.nextLink"].split("$skiptoken=")[1];
+
+      // console.log("result before", result);
+      // console.log("items ", items);
+      // console.log("@odata.nextLink is : ", lnk);
+      // console.log("skiptoken is : ", skiptoken);
+
+      const res = await cli.api(lnk).version("beta").get();
+      result = res;
+      items = [...items, ...result.value];
+
+      // console.log("result after", result);
+      // console.log("items ", items[183]);
+    }
+    console.log(`approver's ID: `, this.state.ApproverEmpId);
+
+    items.map((item, index) => {
+      if (
+        item.manager &&
+        this.state.ApproverEmpId === item.manager.employeeId
+      ) {
+        // console.log(item);
+        // console.log(
+        //   `index: ${index}, emp: ${item.displayName}, manager: ${item.manager.displayName}, mangerID: ${item.manager.employeeId}`
+        // );
+        // console.log(
+        //   `sl ${index} | ${item.employeeId} | ${item.displayName} | ${item.mail}`
+        // );
+        this.setState({
+          relieverDropdownOptions: [
+            ...this.state.relieverDropdownOptions,
+            {
+              key: item.employeeId,
+              text: item.displayName,
+              mail: item.mail,
+              id: item.id,
+            },
+          ],
+        });
+      }
+    });
+
+    // this.w.lists
+    //   .getByTitle("Employee_Master")
+    //   .items.getAll()
+    //   .then((items: any[]) => {
+    //     console.log("Fetching records from Employee_Master: ");
+
+    //     items.map((item, index) => {
+    //       // console.log(index, item.Employee_Name);
+    //       if (item.Incharge_Name === this.state.ApproverName) {
+    //         console.log(
+    //           `sl ${index} | ${item.Title} | ${item.Employee_Name} | ${item.Email} | ${item.Id} `
+    //         );
+    //         this.setState({
+    //           relieverDropdownOptions: [
+    //             ...this.state.relieverDropdownOptions,
+    //             {
+    //               key: item.Title,
+    //               text: item.Employee_Name,
+    //               Email: item.Email,
+    //               ItemId: item.Id,
+    //             },
+    //           ],
+    //         });
+    //       }
+    //     });
+    //   });
   };
 }
