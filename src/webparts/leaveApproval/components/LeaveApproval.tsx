@@ -524,6 +524,7 @@ export default class LeaveApproval extends React.Component<
       // replacing what we are intrested in
       temp = { date: dt, item: item };
       temps[index] = temp;
+
       this.setState(
         {
           relieverArr: temps,
@@ -533,6 +534,10 @@ export default class LeaveApproval extends React.Component<
         }
       );
     };
+
+  private handleResetRelievers = () => {
+    this.setState({ relieverArr: [] });
+  };
 
   public render(): React.ReactElement<ILeaveApprovalProps> {
     return (
@@ -820,6 +825,13 @@ export default class LeaveApproval extends React.Component<
                           <th scope="col">#</th>
                           <th scope="col">Date</th>
                           <th scope="col">Select Reliver</th>
+                          <th>
+                            <DefaultButton
+                              text="Reset All relievers"
+                              onClick={this.handleResetRelievers}
+                              allowDisabledFocus
+                            />
+                          </th>
                         </thead>
                         <tbody>
                           {this.state.leaveStretchArr.map((date, index) => (
@@ -846,6 +858,11 @@ export default class LeaveApproval extends React.Component<
                                   placeholder="Select an option"
                                   options={this.state.relieverDropdownOptions}
                                   styles={dropdownStyles2}
+                                  selectedKey={
+                                    this.state.relieverArr[index] != undefined
+                                      ? this.state.relieverArr[index].item.key
+                                      : null
+                                  }
                                 />
                               </td>
                             </tr>
@@ -993,67 +1010,47 @@ export default class LeaveApproval extends React.Component<
     const list = this.w.lists.getByTitle("Leave_Requests");
     const list2 = this.w.lists.getByTitle("Leave_Master");
     const leave_type = this.state.leaveTypeKey;
-    console.log("when submit: ", leave_type, " ", this.state.selectedAction);
+    console.log("when submit: ", leave_type, " ", this.state.selectedItem);
 
     if (
       this.state.selectedAction === undefined ||
       this.state.remarks === undefined
-    )
+    ) {
       this.setState({ isIncomplete: true });
-    else {
-      // this if is for deducting leaveAppliedForDays from Leave_Master
-      // if the leave is approved, and not a special leave
-      if (
-        this.state.selectedAction === "Approved" &&
-        this.state.leaveType != "Special Leave"
-      ) {
-        // get a specific item by id
-        console.log("Now Deducting from leave Master");
-
-        this.w.lists
-          .getByTitle("Leave_Master")
-          .items.getById(this.state.LeaveMasterItem_Id)
-          .get()
-          .then((item: any) => {
-            // modifying
-            item[leave_type] =
-              this.state.balLeavesObj[leave_type] -
-              this.state.leaveAppliedForDays;
-
-            // now updatating
-            list2.items
-              .getById(this.state.LeaveMasterItem_Id)
-              .update(item)
-              .then((i) => {
-                console.log(i);
-              });
-            console.log("item is : ", item);
-          })
-          .catch((err) => {
-            console.log("An error occured while updating leave Master 😢", err);
-          });
-      }
-
-      // push all reliver data to Reliever_List and if leave type is commOff
-      // update two values in CommOff_Master
+    } else {
       if (this.state.selectedAction === "Approved") {
-        this.state.relieverArr.map((el) => {
-          // pushing each element in rel arr to rel_list
-          console.log("Id is: ");
-          const obj = this.GetUserId(el.item.mail);
-          console.log(obj);
-          // add an item to the list
+        // this if is for deducting leaveAppliedForDays from Leave_Master
+        // if the leave is approved, and not a special leave
+        if (this.state.leaveType != "Special Leave") {
+          // get a specific item by id
+          console.log("Now Deducting from leave Master");
+
           this.w.lists
-            .getByTitle("Reliever_List")
-            .items.add({
-              Request_ID: this.state.LeaveReqItem_Id,
-              Date: new Date(el.date),
-              RelieverId: obj.d.Id,
+            .getByTitle("Leave_Master")
+            .items.getById(this.state.LeaveMasterItem_Id)
+            .get()
+            .then((item: any) => {
+              // modifying
+              item[leave_type] =
+                this.state.balLeavesObj[leave_type] -
+                this.state.leaveAppliedForDays;
+
+              // now updatating
+              list2.items
+                .getById(this.state.LeaveMasterItem_Id)
+                .update(item)
+                .then((i) => {
+                  console.log(i);
+                });
+              console.log("item is : ", item);
             })
-            .then((iar) => {
-              console.log(iar);
+            .catch((err) => {
+              console.log(
+                "An error occured while updating leave Master 😢",
+                err
+              );
             });
-        });
+        }
 
         if (this.state.leaveTypeKey === "Comp_Off") {
           // updaing the CommOff_Master list
@@ -1069,29 +1066,131 @@ export default class LeaveApproval extends React.Component<
               console.log(i);
             });
         }
+
+        // push all reliver data to Reliever_List and if leave type is commOff
+        // update two values in CommOff_Master
+        this.state.relieverArr.map((el) => {
+          if (el != undefined) {
+            // pushing each element in rel arr to rel_list
+            console.log("Id is: ");
+            const obj = this.GetUserId(el.item.mail);
+            console.log(obj);
+            // add an item to the list
+            this.w.lists
+              .getByTitle("Reliever_List")
+              .items.add({
+                Request_ID: this.state.LeaveReqItem_Id,
+                Date: new Date(el.date),
+                RelieverId: obj.d.Id,
+              })
+              .then((iar) => {
+                console.log(iar);
+              });
+          }
+        });
+        // This will always be done if submit button in clicked!
+        // update req status and remarks inside leave_req list
+        list.items
+          .getById(this.state.LeaveReqItem_Id)
+          .update({
+            RelieverId: this.state.relieverId,
+            Approver_Remarks: this.state.remarks,
+            Status: this.state.selectedAction,
+          })
+          .then((i) => {
+            console.log(i);
+            if (this.state.selectedAction != "Accepted") {
+              alert(
+                `Leave Request has been successfully ${this.state.selectedAction}`
+              );
+            } else {
+              alert("Approved leaves, deducted from leave master.");
+            }
+            this.setState({ isModalOpen: false });
+            window.location.reload();
+          });
       }
 
-      // This is always be done if submit button in clicked!
-      // update req status and remarks inside leave_req list
-      list.items
-        .getById(this.state.LeaveReqItem_Id)
-        .update({
-          RelieverId: this.state.relieverId,
-          Approver_Remarks: this.state.remarks,
-          Status: this.state.selectedAction,
-        })
-        .then((i) => {
-          console.log(i);
-          if (this.state.selectedAction != "Accepted") {
+      if (this.state.selectedItem === "fw_to_HA") {
+        this.props.context.msGraphClientFactory
+          .getClient()
+          .then((client: MSGraphClient) => {
+            client
+              .api("/me/manager")
+              .get()
+              .then((res) => {
+                console.log("My manager is\n", res);
+                let managerId = this.GetUserId(res.mail);
+
+                // posting
+                list.items
+                  .getById(this.state.LeaveReqItem_Id)
+                  .update({
+                    Assigned_To_PersonId: managerId.d.Id,
+                  })
+                  .then((i) => {
+                    console.log(i);
+                    if (this.state.selectedAction != "Accepted") {
+                      alert(
+                        `Leave Request has been successfully ${this.state.selectedAction}`
+                      );
+                    } else {
+                      alert("Approved leaves, deducted from leave master.");
+                    }
+                    this.setState({ isModalOpen: false });
+                    window.location.reload();
+                  });
+              })
+              .then(() => {
+                console.log("Will be printed after manager!");
+              })
+              .catch((err) => {
+                console.log(
+                  "Error in submit button clicked!!, fw_to_HA:\n",
+                  err
+                );
+                alert(
+                  "Current Employee does not have a manager assigned!\n Cannot forward request to higher authorities"
+                );
+              });
+          });
+      }
+
+      if (this.state.selectedItem === "fw_to_HR") {
+        alert("Message forwarded to HR");
+        // get all the items from a list
+        this.w.lists
+          .getByTitle("Configure_HR")
+          .items.get()
+          .then((items: any[]) => {
+            console.log(items);
+
+            // posting
+            list.items
+              .getById(this.state.LeaveReqItem_Id)
+              .update({
+                Assigned_To_PersonId: items[0].Current_HRId,
+              })
+              .then((i) => {
+                console.log(i);
+                if (this.state.selectedAction != "Accepted") {
+                  alert(
+                    `Leave Request has been successfully ${this.state.selectedAction}`
+                  );
+                } else {
+                  alert("Approved leaves, deducted from leave master.");
+                }
+                this.setState({ isModalOpen: false });
+                window.location.reload();
+              });
+          })
+          .catch((err) => {
+            console.log("Error in submit button clicked!!, fw_to_HR:\n", err);
             alert(
-              `Leave Request has been successfully ${this.state.selectedAction}`
+              "Current Employee does not have a HR assigned!\n Cannot forward request to HR"
             );
-          } else {
-            alert("Approved leaves, deducted from leave master.");
-          }
-          this.setState({ isModalOpen: false });
-          window.location.reload();
-        });
+          });
+      }
     }
   };
 
@@ -1217,10 +1316,10 @@ export default class LeaveApproval extends React.Component<
   // Pass logged in user's emailID to this function to get his userID
   // which will be pushed to the EmployeeId list col
   private GetUserId(userName) {
-    // required while dev
+    // required in development
     var siteUrl = this.props.webUrl + "/sites/Maitri";
 
-    // requile while building for production
+    // required in production
     // var siteUrl = this.props.webUrl;
 
     // console.log("siteUrl", siteUrl);
@@ -1337,8 +1436,14 @@ export default class LeaveApproval extends React.Component<
           leave_type_text: LeaveTypeTxt,
           leave_type_key: LeaveTypeKey,
           commOffDate: obj.Compoff_against_date,
-          commOffOccasion: obj.Compoff_occasion.split("$")[1],
-          commOffRefID: obj.Compoff_occasion.split("$")[0],
+          commOffOccasion:
+            LeaveTypeKey === "Comp_Off"
+              ? obj.Compoff_occasion.split("$")[1]
+              : null,
+          commOffRefID:
+            LeaveTypeKey === "Comp_Off"
+              ? obj.Compoff_occasion.split("$")[0]
+              : null,
           leaveReqItem_Id: obj.Id,
         },
       ],
